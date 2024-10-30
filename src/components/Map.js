@@ -15,13 +15,11 @@ import L from "leaflet";
 
 // SVG를 Base64로 인코딩하는 함수
 function svgToDataUrl(svgStr) {
-  try {
-    const encoded = btoa(unescape(encodeURIComponent(svgStr)));
-    return `data:image/svg+xml;base64,${encoded}`;
-  } catch (e) {
-    console.error("SVG encoding error:", e);
-    return "";
-  }
+  const encoded =
+    typeof window !== "undefined"
+      ? window.btoa(svgStr)
+      : Buffer.from(svgStr).toString("base64");
+  return `data:image/svg+xml;base64,${encoded}`;
 }
 
 // 최적 입지용 마커 아이콘 (별 모양)
@@ -29,11 +27,11 @@ const createOptimalIcon = (color) => {
   return L.icon({
     iconUrl:
       svgToDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-    <path d="M12 0L14.59 7.12L22 7.64L16.55 12.47L18.18 20L12 16.48L5.82 20L7.45 12.47L2 7.64L9.41 7.12L12 0Z"
-    fill="${color}" 
-    stroke="#ffffff" 
-    stroke-width="1"/>
-  </svg>`),
+   <path d="M12 0L14.59 7.12L22 7.64L16.55 12.47L18.18 20L12 16.48L5.82 20L7.45 12.47L2 7.64L9.41 7.12L12 0Z"
+   fill="${color}" 
+   stroke="#ffffff" 
+   stroke-width="1"/>
+ </svg>`),
     iconSize: [24, 24],
     iconAnchor: [12, 12],
     popupAnchor: [0, -12],
@@ -45,11 +43,11 @@ const createPublicIcon = (color) => {
   return L.icon({
     iconUrl:
       svgToDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-    <rect x="2" y="2" width="20" height="20" rx="4"
-    fill="${color}" 
-    stroke="#ffffff" 
-    stroke-width="2"/>
-  </svg>`),
+   <rect x="2" y="2" width="20" height="20" rx="4"
+   fill="${color}" 
+   stroke="#ffffff" 
+   stroke-width="2"/>
+ </svg>`),
     iconSize: [24, 24],
     iconAnchor: [12, 12],
     popupAnchor: [0, -12],
@@ -78,9 +76,8 @@ const createPrivateIcon = (color) => {
   });
 };
 
-import React from "react";
-
-const MapLegend = ({ colors }) => (
+// 범례 컴포넌트 수정
+const MapLegend = ({ colors, showCircles }) => (
   <div className="absolute bottom-4 right-4 z-[1000] bg-white p-3 rounded-lg shadow-lg">
     <h4 className="text-sm font-bold mb-2 text-dark">범례</h4>
     <div className="space-y-2">
@@ -107,63 +104,44 @@ const MapLegend = ({ colors }) => (
         <span className="text-xs text-dark">기존 공영주차장</span>
       </div>
       <div className="flex items-center gap-2">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-        >
-          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow
-              dx="0"
-              dy="1"
-              stdDeviation="1"
-              floodColor="rgba(0,0,0,0.3)"
-            />
-          </filter>
+        <svg width="16" height="20" viewBox="0 0 30 40">
           <path
-            d="M8 0C3.6 0 0 3.6 0 8c0 4.8 8 13.3 8 13.3S16 12.8 16 8c0-4.4-3.6-8-8-8z"
-            fill="#2B83F6"
+            d="M15 0C6.716 0 0 6.716 0 15c0 9 15 25 15 25s15-16 15-25c0-8.284-6.716-15-15-15z"
+            fill={colors.primary}
             stroke="#ffffff"
-            strokeWidth="1"
-            filter="url(#shadow)"
+            strokeWidth="1.5"
           />
-          <circle cx="8" cy="8" r="2.5" fill="white" />
+          <circle cx="15" cy="15" r="4.5" fill="white" />
         </svg>
         <span className="text-xs text-dark">가까운 공영 주차장</span>
       </div>
-      <div className="flex items-center gap-2">
-        <svg width="16" height="16" viewBox="0 0 24 24">
-          <line
-            x1="2"
-            y1="12"
-            x2="22"
-            y2="12"
-            stroke="purple"
-            strokeWidth="2"
-            strokeDasharray="4,4"
-          />
-        </svg>
-        <span className="text-xs text-dark">거리 연결선</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <svg width="16" height="16" viewBox="0 0 24 24">
-          <circle
-            cx="12"
-            cy="12"
-            r="8"
-            fill={colors.circle}
-            fillOpacity="0.3"
-            stroke={colors.circle}
-          />
-        </svg>
-        <span className="text-xs text-dark">불법 주정차 단속 위치</span>
-      </div>
+      {showCircles && (
+        <div className="flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24">
+            <circle
+              cx="12"
+              cy="12"
+              r="8"
+              fill={colors.circle}
+              fillOpacity="0.3"
+              stroke={colors.circle}
+            />
+          </svg>
+          <span className="text-xs text-dark">불법 주정차 단속 위치</span>
+        </div>
+      )}
     </div>
   </div>
 );
 
-const ParkingLotPopup = ({ parkingLot, type }) => {
+// ParkingLotPopup 컴포넌트 수정
+const ParkingLotPopup = ({
+  parkingLot,
+  type,
+  nearestPublicParkings,
+  lines,
+  publicParkings,
+}) => {
   const getLocation = () => {
     if (type === "public") {
       return { lat: parkingLot.lat, lng: parkingLot.lng };
@@ -202,12 +180,50 @@ const ParkingLotPopup = ({ parkingLot, type }) => {
         </span>
       </div>
       <div className="text-sm text-dark/80">
-        {parkingLot.address && <p>주소: {parkingLot.address}</p>}
+        {parkingLot.address && <p>이름: {parkingLot.address}</p>}
         {parkingLot.district && <p>지역구: {parkingLot.district}</p>}
         <p>
           위치: {location.lat}, {location.lng}
         </p>
       </div>
+
+      {/* 최적입지일 경우에만 추가 메시지 표시 */}
+      {type === "optimal" && (
+        <div className="mt-2 p-2 bg-blue-50 rounded-md">
+          <p className="text-sm text-blue-600">
+            {/* 현재 최적 입지와 연결된 선분 찾기 */}
+            {(() => {
+              const connectedLine = lines.find(
+                (line) =>
+                  line.start.lat === parkingLot.location.lat &&
+                  line.start.lng === parkingLot.location.lng
+              );
+
+              if (!connectedLine) return "해당 입지 근처에 새로운 공영주차장 개발 방안이 필요합니다!";
+
+              // 선분의 끝점과 연결된 가까운 공영주차장 찾기
+              const nearestParking = nearestPublicParkings.find(
+                (parking) =>
+                  parking.location.lat === connectedLine.end.lat &&
+                  parking.location.lng === connectedLine.end.lng
+              );
+
+              const publicParking = publicParkings.find(
+                (parking) =>
+                  parking.lat === nearestParking.location.lat &&
+                  parking.lng === nearestParking.location.lng
+              );
+            
+
+              if (!nearestParking) return "해당 입지 근처에 새로운 공영주차장 개발 방안이 필요합니다!";
+
+              return nearestParking.distance <= 600
+                ? `${publicParking.address ? publicParking.address : ""} 공영주차장의 확장 및 홍보 방안이 필요합니다!`
+                : "해당 입지 근처에 새로운 공영주차장 개발 방안이 필요합니다!";
+            })()}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
@@ -221,6 +237,7 @@ export default function Map({
   lines,
   colors,
   selectedParkingLot,
+  showCircles,
 }) {
   const mapRef = useRef(null);
   const markerRefs = useRef({});
@@ -261,7 +278,7 @@ export default function Map({
           attribution="&copy; OpenStreetMap contributors"
         />
 
-        {/* 선분 표시 */}
+        {/* 선분 */}
         {lines &&
           lines.map((line, index) => (
             <Polyline
@@ -270,27 +287,32 @@ export default function Map({
                 [line.start.lat, line.start.lng],
                 [line.end.lat, line.end.lng],
               ]}
-              pathOptions={{
-                color: "purple",
-                weight: 2.5,
-                opacity: 0.8,
-              }}
+              pathOptions={line.style}
             />
           ))}
 
-        {/* 빨간색 원형 */}
-        {circles &&
+        {/* 원형 - showCircles 상태에 따라 조건부 렌더링 */}
+        {showCircles &&
+          circles &&
           circles.map((circle) => (
             <Circle
               key={circle.id}
               center={[circle.lat, circle.lng]}
-              radius={50}
+              radius={circle.radius}
               pathOptions={{
-                color: colors.circle,
-                fillColor: colors.circle,
-                fillOpacity: 0.3,
+                color: circle.color,
+                fillColor: circle.color,
+                fillOpacity: circle.fillOpacity,
+                weight: circle.strokeWeight,
+                opacity: circle.strokeOpacity,
               }}
-            />
+            >
+              <Popup>
+                <div className="text-sm">
+                  이 지역의 불법 주정차 단속 빈도가 높습니다
+                </div>
+              </Popup>
+            </Circle>
           ))}
 
         {/* 최적 입지 마커 */}
@@ -306,7 +328,13 @@ export default function Map({
             }}
           >
             <Popup>
-              <ParkingLotPopup parkingLot={location} type="optimal" />
+              <ParkingLotPopup
+                parkingLot={location}
+                type="optimal"
+                nearestPublicParkings={nearestPublicParkings}
+                lines={lines}
+                publicParkings={publicParkings}
+              />
             </Popup>
           </Marker>
         ))}
@@ -348,7 +376,7 @@ export default function Map({
           </Marker>
         ))}
 
-        <MapLegend colors={colors} />
+        <MapLegend colors={colors} showCircles={showCircles} />
       </MapContainer>
     </div>
   );

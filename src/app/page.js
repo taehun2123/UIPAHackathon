@@ -30,8 +30,8 @@ const parseMapHtml = async () => {
 
     const optimalLocations = [];
     const nearestPublicParkings = [];
-    const circles = [];
     const lines = [];
+    const tempCircles = []; // 임시 원 데이터 저장
 
     // 선분(라인) 정보 추출 - 패턴 수정
     const linePattern =
@@ -50,9 +50,10 @@ const parseMapHtml = async () => {
           lng: parseFloat(endLng),
         },
         style: {
-          color: "purple",
-          weight: 2.5,
-          opacity: 0.8,
+          color: "#6B46C1", // 보라색을 더 진하게
+          weight: 3.5, // 선 두께 증가
+          opacity: 1, // 불투명도 증가
+          dashArray: "10, 5", // 점선 패턴 추가
         },
       });
     }
@@ -84,6 +85,9 @@ const parseMapHtml = async () => {
         const districtMatch = popupContent.match(/([가-힣]+(구|군))/);
         const district = districtMatch ? districtMatch[0] : "";
 
+        // '클러스터'를 '예측입지'로 변경
+        const modifiedAddress = popupContent.replace(/클러스터/g, "예측입지");
+
         optimalLocations.push({
           id: `optimal_${optimalLocations.length + 1}`,
           district: district,
@@ -91,7 +95,7 @@ const parseMapHtml = async () => {
             lat: parseFloat(lat),
             lng: parseFloat(lng),
           },
-          address: popupContent.trim(),
+          address: modifiedAddress,
         });
 
         // 이전에 추가된 가까운 주차장의 구 정보 업데이트
@@ -104,30 +108,68 @@ const parseMapHtml = async () => {
 
     // 불법 주정차 단속 위치 추출
     const circlePattern =
-      /var\s+circle_marker_[^=]+=\s*L\.circleMarker\(\s*\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\]/g;
+      /var\s+circle_marker_[^=]+=\s*L\.circleMarker\(\s*\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\][^}]*"radius":\s*(\d+\.?\d*)[^}]*\}/g;
     let circleMatch;
+
+    // 모든 원의 위치와 크기 수집
     while ((circleMatch = circlePattern.exec(html)) !== null) {
-      const [_, lat, lng] = circleMatch;
-      circles.push({
-        id: `circle_${circles.length + 1}`,
+      const [_, lat, lng, radius] = circleMatch;
+      tempCircles.push({
         lat: parseFloat(lat),
         lng: parseFloat(lng),
+        radius: parseFloat(radius) * 50, // HTML의 radius 값을 50배로 scaling
+        fillOpacity: 0.25, // 채우기 투명도 감소
+        strokeOpacity: 0.8, // 테두리 투명도 설정
+        strokeWeight: 1, // 테두리 두께 설정
       });
     }
 
-    // 디버깅
-    console.log("Parsed Lines:", lines.length, lines);
-    console.log(
-      "Parsed Optimal Locations:",
-      optimalLocations.length,
-      optimalLocations
-    );
-    console.log(
-      "Parsed Private Parkings:",
-      nearestPublicParkings.length,
-      nearestPublicParkings
-    );
-    console.log("Parsed Circles:", circles.length, circles);
+    // 가까운 원들 병합
+    const DISTANCE_THRESHOLD = 0.002; // 약 200m
+    const mergedCircles = [];
+
+    tempCircles.forEach((circle) => {
+      let found = false;
+
+      for (let existing of mergedCircles) {
+        const distance = Math.sqrt(
+          Math.pow(circle.lat - existing.lat, 2) +
+            Math.pow(circle.lng - existing.lng, 2)
+        );
+
+        if (distance < DISTANCE_THRESHOLD) {
+          // 위치를 radius 가중 평균으로 업데이트
+          const totalRadius = existing.radius + circle.radius;
+          existing.lat =
+            (existing.lat * existing.radius + circle.lat * circle.radius) /
+            totalRadius;
+          existing.lng =
+            (existing.lng * existing.radius + circle.lng * circle.radius) /
+            totalRadius;
+          existing.radius = totalRadius; // radius 합산
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        mergedCircles.push({ ...circle });
+      }
+    });
+
+    // 최종 circles 배열 생성
+    const circles = mergedCircles.map((circle, index) => ({
+      id: `circle_${index + 1}`,
+      lat: circle.lat,
+      lng: circle.lng,
+      radius: circle.radius,
+      fillOpacity: circle.fillOpacity || 0.25,
+      strokeOpacity: circle.strokeOpacity || 0.8,
+      strokeWeight: circle.strokeWeight || 1,
+      color: "#FF0000", // 빨간색 유지
+      weight: 1, // 테두리 두께
+      fill: true, // 채우기 유지
+    }));
 
     return {
       optimalLocations,
@@ -160,28 +202,29 @@ const generatePublicParkings = async () => {
   }
 };
 
-const ParkingLotCard = ({ parkingLot, onSelect, type }) => (
-  <div
-    className={`p-3 bg-white border rounded-lg hover:bg-light transition-colors duration-200 cursor-pointer shadow-sm ${
-      type === "optimal" ? "border-optimal/30" : "border-public/30"
-    }`}
-    onClick={() => onSelect(parkingLot.id)}
-  >
-    <div className="flex items-start justify-between">
-      <p className="font-medium text-dark">{parkingLot.address}</p>
-      <span
-        className={`text-xs px-2 py-1 rounded-full ${
-          type === "optimal"
-            ? "bg-optimal/10 text-optimal text-dark/60"
-            : "bg-public/10 text-public text-dark/60"
-        }`}
-      >
-        {type === "optimal" ? "예측 입지" : "가까운 공영 주차장"}
-      </span>
+  // ParkingLotCard 컴포넌트 수정
+  const ParkingLotCard = ({ parkingLot, onSelect, type }) => (
+    <div
+      className={`p-3 bg-white border rounded-lg hover:bg-light transition-colors duration-200 cursor-pointer shadow-sm ${
+        type === "optimal" ? "border-optimal/30" : "border-public/30"
+      }`}
+      onClick={() => onSelect(parkingLot.id)}
+    >
+      <div className="flex items-start justify-between">
+        <p className="font-medium text-dark">{parkingLot.address}</p>
+        <span
+          className={`text-xs px-2 py-1 rounded-full ${
+            type === "optimal"
+              ? "bg-optimal/10 text-optimal text-dark/60"
+              : "bg-public/10 text-public text-dark/60"
+          }`}
+        >
+          {type === "optimal" ? "예측 입지" : "가까운 공영 주차장"}
+        </span>
+      </div>
+      <p className="text-sm text-dark/80 mt-1">지역구: {parkingLot.district}</p>
     </div>
-    <p className="text-sm text-dark/80 mt-1">지역구: {parkingLot.district}</p>
-  </div>
-);
+  );
 
 export default function Home() {
   const [selectedDistrict, setSelectedDistrict] = useState("all");
@@ -191,6 +234,7 @@ export default function Home() {
   const [circles, setCircles] = useState([]);
   const [lines, setLines] = useState([]);
   const [selectedParkingLot, setSelectedParkingLot] = useState(null);
+  const [showCircles, setShowCircles] = useState(true); // 원 표시 여부 상태 추가
 
   useEffect(() => {
     const initializeData = async () => {
@@ -203,9 +247,8 @@ export default function Home() {
         setOptimalLocations(parsedData.optimalLocations);
         setNearestPublicParkings(parsedData.nearestPublicParkings);
         setCircles(parsedData.circles);
-        setPublicParkings(publicData);
-        // lines 데이터도 저장하도록 수정
         setLines(parsedData.lines);
+        setPublicParkings(publicData);
       } catch (error) {
         console.error("Error initializing data:", error);
       }
@@ -213,6 +256,7 @@ export default function Home() {
 
     initializeData();
   }, []);
+
 
   const filteredNearestPublicParkings =
     selectedDistrict === "all"
@@ -228,12 +272,39 @@ export default function Home() {
           item.district.includes(selectedDistrict)
         );
 
+  // 선분 필터링 로직
+  const filteredLines =
+    selectedDistrict === "all"
+      ? lines
+      : lines.filter((line) => {
+          // 선분의 시작점이 필터링된 최적 입지에 포함되는지 확인
+          return filteredOptimalLocations.some(
+            (location) =>
+              Math.abs(location.location.lat - line.start.lat) < 0.0001 &&
+              Math.abs(location.location.lng - line.start.lng) < 0.0001
+          );
+        });
+
   return (
     <div className="flex h-screen bg-white">
       <div className="w-80 border-r border-border p-4 overflow-y-auto">
         <h2 className="text-2xl font-bold mb-4 text-dark">
           공영주차장 최적 입지 분석
         </h2>
+
+        {/* 토글 버튼 추가 */}
+        <div className="mb-4">
+          <button
+            className={`px-4 py-2 rounded-lg w-full ${
+              showCircles
+                ? "bg-red-500 text-white hover:bg-red-600"
+                : "bg-blue-500 text-white hover:bg-blue-400"
+            } transition-colors duration-200`}
+            onClick={() => setShowCircles(!showCircles)}
+          >
+            {showCircles ? "단속 지점 숨기기" : "단속 지점 표시"}
+          </button>
+        </div>
 
         <div className="mb-6">
           <select
@@ -264,7 +335,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 예측 입지 목록 */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-bold text-dark">예측 입지 목록</h3>
@@ -284,10 +354,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 구분선 */}
         <div className="my-4 border-t border-border"></div>
 
-        {/* 가까운 공영 주차장 목록 */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-bold text-dark">가까운 공영 주차장 목록</h3>
@@ -316,8 +384,9 @@ export default function Home() {
           nearestPublicParkings={filteredNearestPublicParkings}
           circles={circles}
           colors={COLORS}
-          lines={lines}
+          lines={filteredLines}
           selectedParkingLot={selectedParkingLot}
+          showCircles={showCircles}ㅌ
         />
       </div>
     </div>
