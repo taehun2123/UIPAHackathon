@@ -202,29 +202,29 @@ const generatePublicParkings = async () => {
   }
 };
 
-  // ParkingLotCard 컴포넌트 수정
-  const ParkingLotCard = ({ parkingLot, onSelect, type }) => (
-    <div
-      className={`p-3 bg-white border rounded-lg hover:bg-light transition-colors duration-200 cursor-pointer shadow-sm ${
-        type === "optimal" ? "border-optimal/30" : "border-public/30"
-      }`}
-      onClick={() => onSelect(parkingLot.id)}
-    >
-      <div className="flex items-start justify-between">
-        <p className="font-medium text-dark">{parkingLot.address}</p>
-        <span
-          className={`text-xs px-2 py-1 rounded-full ${
-            type === "optimal"
-              ? "bg-optimal/10 text-optimal text-dark/60"
-              : "bg-public/10 text-public text-dark/60"
-          }`}
-        >
-          {type === "optimal" ? "예측 입지" : "가까운 공영 주차장"}
-        </span>
-      </div>
-      <p className="text-sm text-dark/80 mt-1">지역구: {parkingLot.district}</p>
+// ParkingLotCard 컴포넌트 수정
+const ParkingLotCard = ({ parkingLot, onSelect, type }) => (
+  <div
+    className={`p-3 bg-white border rounded-lg hover:bg-light transition-colors duration-200 cursor-pointer shadow-sm ${
+      type === "optimal" ? "border-optimal/30" : "border-public/30"
+    }`}
+    onClick={() => onSelect(parkingLot.id)}
+  >
+    <div className="flex items-start justify-between">
+      <p className="font-medium text-dark">{parkingLot.address}</p>
+      <span
+        className={`text-xs px-2 py-1 rounded-full ${
+          type === "optimal"
+            ? "bg-optimal/10 text-optimal text-dark/60"
+            : "bg-public/10 text-public text-dark/60"
+        }`}
+      >
+        {type === "optimal" ? "예측 입지" : "가까운 공영 주차장"}
+      </span>
     </div>
-  );
+    <p className="text-sm text-dark/80 mt-1">지역구: {parkingLot.district}</p>
+  </div>
+);
 
 export default function Home() {
   const [selectedDistrict, setSelectedDistrict] = useState("all");
@@ -235,6 +235,7 @@ export default function Home() {
   const [lines, setLines] = useState([]);
   const [selectedParkingLot, setSelectedParkingLot] = useState(null);
   const [showCircles, setShowCircles] = useState(true); // 원 표시 여부 상태 추가
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // 사이드바 상태만 추가
 
   useEffect(() => {
     const initializeData = async () => {
@@ -256,7 +257,6 @@ export default function Home() {
 
     initializeData();
   }, []);
-
 
   const filteredNearestPublicParkings =
     selectedDistrict === "all"
@@ -286,97 +286,128 @@ export default function Home() {
         });
 
   return (
-    <div className="flex h-screen bg-white">
-      <div className="w-80 border-r border-border p-4 overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-4 text-dark">
-          공영주차장 최적 입지 분석
-        </h2>
+    <div className="flex h-screen bg-white relative">
+      {/* 사이드바 */}
+      <div
+        className={`${
+          isSidebarOpen ? "w-100" : "w-0 -ml-80"
+        } border-r bg-white border-border overflow-hidden transition-all duration-300 absolute h-full z-20`}
+      >
+        {/* absolute 추가 */}
+        <div className="w-80 h-full overflow-y-auto p-4 bg-white">
+          <h2 className="text-2xl font-bold mb-4 text-dark">
+            공영주차장 최적 입지 분석
+          </h2>
 
-        {/* 토글 버튼 추가 */}
-        <div className="mb-4">
-          <button
-            className={`px-4 py-2 rounded-lg w-full ${
-              showCircles
-                ? "bg-red-500 text-white hover:bg-red-600"
-                : "bg-blue-500 text-white hover:bg-blue-400"
-            } transition-colors duration-200`}
-            onClick={() => setShowCircles(!showCircles)}
-          >
-            {showCircles ? "단속 지점 숨기기" : "단속 지점 표시"}
-          </button>
-        </div>
-
-        <div className="mb-6">
-          <select
-            className="w-full p-2 border border-border rounded bg-white text-dark focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            value={selectedDistrict}
-            onChange={(e) => setSelectedDistrict(e.target.value)}
-          >
-            <option value="all">전체 지역구</option>
-            {DISTRICTS.map((district) => (
-              <option key={district} value={district}>
-                {district}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="mb-6 bg-light border border-border p-4 rounded-lg">
-          <h3 className="font-bold mb-2 text-dark">
-            {selectedDistrict === "all"
-              ? "전체 통계"
-              : `${selectedDistrict} 통계`}
-          </h3>
-          <div className="text-dark/80">
-            <p>예측 입지 수: {filteredOptimalLocations.length}개</p>
-            <p>
-              가까운 공영 주차장 수: {filteredNearestPublicParkings.length}개
-            </p>
+          {/* 토글 버튼 추가 */}
+          <div className="mb-4">
+            <button
+              className={`px-4 py-2 rounded-lg w-full ${
+                showCircles
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : "bg-blue-500 text-white hover:bg-blue-400"
+              } transition-colors duration-200`}
+              onClick={() => setShowCircles(!showCircles)}
+            >
+              {showCircles ? "단속 지점 숨기기" : "단속 지점 표시"}
+            </button>
           </div>
-        </div>
 
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-dark">예측 입지 목록</h3>
-            <span className="text-sm text-dark/60">
-              {filteredOptimalLocations.length}개
-            </span>
+          <div className="mb-6">
+            <select
+              className="w-full p-2 border border-border rounded bg-white text-dark focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              value={selectedDistrict}
+              onChange={(e) => setSelectedDistrict(e.target.value)}
+            >
+              <option value="all">전체 지역구</option>
+              {DISTRICTS.map((district) => (
+                <option key={district} value={district}>
+                  {district}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="space-y-2">
-            {filteredOptimalLocations.map((location) => (
-              <ParkingLotCard
-                key={location.id}
-                parkingLot={location}
-                onSelect={setSelectedParkingLot}
-                type="optimal"
-              />
-            ))}
-          </div>
-        </div>
 
-        <div className="my-4 border-t border-border"></div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-dark">가까운 공영 주차장 목록</h3>
-            <span className="text-sm text-dark/60">
-              {filteredNearestPublicParkings.length}개
-            </span>
+          <div className="mb-6 bg-light border border-border p-4 rounded-lg">
+            <h3 className="font-bold mb-2 text-dark">
+              {selectedDistrict === "all"
+                ? "전체 통계"
+                : `${selectedDistrict} 통계`}
+            </h3>
+            <div className="text-dark/80">
+              <p>예측 입지 수: {filteredOptimalLocations.length}개</p>
+              <p>
+                가까운 공영 주차장 수: {filteredNearestPublicParkings.length}개
+              </p>
+            </div>
           </div>
-          <div className="space-y-2">
-            {filteredNearestPublicParkings.map((parking) => (
-              <ParkingLotCard
-                key={parking.id}
-                parkingLot={parking}
-                onSelect={setSelectedParkingLot}
-                type="public"
-              />
-            ))}
+
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-dark">예측 입지 목록</h3>
+              <span className="text-sm text-dark/60">
+                {filteredOptimalLocations.length}개
+              </span>
+            </div>
+            <div className="space-y-2">
+              {filteredOptimalLocations.map((location) => (
+                <ParkingLotCard
+                  key={location.id}
+                  parkingLot={location}
+                  onSelect={setSelectedParkingLot}
+                  type="optimal"
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="my-4 border-t border-border"></div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-dark">가까운 공영 주차장 목록</h3>
+              <span className="text-sm text-dark/60">
+                {filteredNearestPublicParkings.length}개
+              </span>
+            </div>
+            <div className="space-y-2">
+              {filteredNearestPublicParkings.map((parking) => (
+                <ParkingLotCard
+                  key={parking.id}
+                  parkingLot={parking}
+                  onSelect={setSelectedParkingLot}
+                  type="public"
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1">
+            {/* 토글 버튼 */}
+            <button
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        className={`fixed ${
+          isSidebarOpen ? 'left-[320px]' : 'left-0'
+        } top-[100px] bg-white p-2 rounded-r shadow-md hover:bg-gray-100 transition-all duration-300 border border-l-0 border-border z-50`}
+      >
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          className="h-6 w-6" 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="#000000"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d={isSidebarOpen ? "M15 19l-7-7 7-7" : "M9 5l7 7-7 7"} 
+          />
+        </svg>
+      </button>
+
+      <div className="w-full h-full z-10">  {/* flex-1 대신 w-full 사용 */}
         <Map
           center={ULSAN_CENTER}
           optimalLocations={filteredOptimalLocations}
@@ -386,7 +417,7 @@ export default function Home() {
           colors={COLORS}
           lines={filteredLines}
           selectedParkingLot={selectedParkingLot}
-          showCircles={showCircles}ㅌ
+          showCircles={showCircles}
         />
       </div>
     </div>
